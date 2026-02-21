@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dep-patchflow"
+version = "0.1.0"
+description = "Snyk-driven dependency upgrades gated by JFrog Artifactory, with optional Patchwork apply."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "jadiadeep" }]
+keywords = ["security", "snyk", "artifactory", "dependency", "patchwork"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "httpx>=0.24",
+    "pyyaml>=6.0",
+    "packaging>=23.0",
+    "semver>=3.0",
+    "typer>=0.9",
+    "rich>=13.0",
+    "uvicorn[standard]>=0.24",
+    "fastapi>=0.104",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+dep-patchflow = "dep_patchflow.main:app"
+
+[project.urls]
+Repository = "https://github.com/jadiadeep/snyk-artifactory-patchflow"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"

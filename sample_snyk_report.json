@@ -1,0 +1,11 @@
+{
+  "vulnerabilities": [
+    {
+      "packageName": "requests",
+      "version": "2.25.0",
+      "severity": "high",
+      "upgradePath": ["requests@2.28.0"]
+    }
+  ],
+  "packageManager": "pip"
+}

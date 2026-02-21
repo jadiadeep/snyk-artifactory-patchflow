@@ -1,0 +1,30 @@
+# dep-patchflow configuration example.
+# Copy to config.yml and set values. Never commit secrets.
+# All values can be overridden by environment variables (UPPER_SNAKE_CASE).
+
+# JFrog Artifactory
+artifactory_base_url: "https://your-company.jfrog.io/artifactory"
+artifactory_token: "${ARTIFACTORY_TOKEN}"   # or set ARTIFACTORY_TOKEN in env
+# Alternative: artifactory_username + artifactory_password
+
+# Repositories for version listing (AQL or metadata)
+artifactory_repo_pypi: "pypi-remote"       # or your virtual repo for Python
+artifactory_repo_npm: "npm-remote"         # or your virtual repo for Node
+
+# Optional: Snyk API (for pulling reports; not required if you pass --snyk-report file)
+# snyk_token: "${SNYK_TOKEN}"
+
+# Patchwork: OpenAI key is injected via env or this config (never hardcode).
+openai_api_key: "${OPENAI_API_KEY}"
+patchwork_default_yml_path: "default.yml"  # path to Patchwork DependencyUpgrade defaults.yml
+
+# Version listing method: "aql" or "metadata"
+artifactory_version_method: "aql"
+
+# Policy
+policy:
+  allow_major: false
+  min_severity: "medium"       # low, medium, high, critical
+  max_upgrades_per_run: 20
+  prefer_stable_only: true
+  dry_run: false

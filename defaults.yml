@@ -1,0 +1,29 @@
+# dep-patchflow defaults — edit this file when you have credentials.
+# Leave values empty or as-is to run without Artifactory/Patchwork (plan still works; upgrades will be skipped).
+
+# Artifactory base URL (when available). Example: https://your-company.jfrog.io/artifactory
+artifactory_base_url: ""
+
+# Artifactory auth: set one of token or username+password
+artifactory_token: ""
+# artifactory_username: ""
+# artifactory_password: ""
+
+# Repo keys for version listing (only used if artifactory_base_url is set)
+artifactory_repo_pypi: "pypi-remote"
+artifactory_repo_npm: "npm-remote"
+artifactory_version_method: "aql"
+
+# LLM API key for Patchwork (when you want to run Patchwork apply). Example: sk-...
+openai_api_key: ""
+
+# Optional: path to Patchwork's default.yml if you use a custom one
+# patchwork_default_yml_path: "default.yml"
+
+# Policy (optional overrides)
+# policy:
+#   allow_major: false
+#   min_severity: "medium"
+#   max_upgrades_per_run: 20
+#   prefer_stable_only: true
+#   dry_run: false

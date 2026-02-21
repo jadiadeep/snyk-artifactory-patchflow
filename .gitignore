@@ -1,0 +1,28 @@
+# Config with secrets
+config.yml
+.env
+.env.local
+
+# Build / install
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Output
+out/
+
+# Patchwork (if copied locally)
+default.yml
