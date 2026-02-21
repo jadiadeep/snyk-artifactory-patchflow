@@ -78,9 +78,9 @@ def apply(
     snyk_report: Path = typer.Argument(..., help="Path to Snyk JSON report"),
     config: Path = typer.Option(None, "--config", "-c", help="Path to config.yml"),
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project root (for manifests + Patchwork)"),
-    run_patchwork_cli: bool = typer.Option(True, "--patchwork/--no-patchwork", help="Run Patchwork after applying manifest updates"),
+    run_patchwork_cli: bool = typer.Option(True, "--patchwork/--no-patchwork", help="Run Patchwork DependencyUpgrade + AutoFix after applying manifest updates"),
 ) -> None:
-    """Apply upgrade plan: update requirements.txt/package.json, then optionally run Patchwork."""
+    """Apply upgrade plan: update manifests, then run Patchwork DependencyUpgrade and AutoFix."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     settings, config_used = _load_config(str(config) if config else None)
     policy = settings.get_policy()
@@ -110,13 +110,13 @@ def apply(
     else:
         console.print("[dim]No manifest files updated (none found or no Python/Node upgrades).[/dim]")
 
-    if run_patchwork_cli and plan_result.upgrades:
-        console.print("Running Patchwork DependencyUpgrade...")
-        result = run_patchwork(settings, plan_result, project_dir=project_dir, dry_run=False)
-        if result is not None and getattr(result, "returncode", -1) != 0:
-            console.print("[yellow]Patchwork exited with non-zero code. Check logs.[/yellow]")
-    elif run_patchwork_cli and not plan_result.upgrades:
-        console.print("[dim]No upgrades in plan; skipping Patchwork.[/dim]")
+    if run_patchwork_cli:
+        console.print("Running Patchwork DependencyUpgrade then AutoFix...")
+        results = run_patchwork(settings, plan_result, project_dir=project_dir, dry_run=False)
+        for i, name in enumerate(["DependencyUpgrade", "AutoFix"]):
+            r = results[i] if i < len(results) else None
+            if r is not None and getattr(r, "returncode", -1) != 0:
+                console.print(f"[yellow]Patchwork {name} exited with non-zero code. Check logs.[/yellow]")
     console.print("Done.")
 
 

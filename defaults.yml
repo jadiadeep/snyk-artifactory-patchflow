@@ -14,7 +14,7 @@ artifactory_repo_pypi: "pypi-remote"
 artifactory_repo_npm: "npm-remote"
 artifactory_version_method: "aql"
 
-# LLM API key for Patchwork (when you want to run Patchwork apply). Example: sk-...
+# LLM API key for Patchwork (required for apply: DependencyUpgrade + AutoFix). Example: sk-...
 openai_api_key: ""
 
 # Optional: path to Patchwork's default.yml if you use a custom one

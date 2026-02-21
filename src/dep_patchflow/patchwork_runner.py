@@ -52,48 +52,28 @@ def generate_patchflow_instructions(plan: UpgradePlan) -> str:
     return "\n".join(lines)
 
 
-def run_patchwork(
-    settings: Settings,
-    plan: UpgradePlan,
-    project_dir: str | Path | None = None,
-    dry_run: bool = False,
+def _run_patchwork_cmd(
+    patchflow: str,
+    key: str,
+    cwd: Path,
+    timeout: int = 600,
 ) -> subprocess.CompletedProcess | None:
-    """
-    Run Patchwork DependencyUpgrade (or AutoFix) via subprocess.
-    If dry_run: do not execute, return None.
-    In apply flow, manifest files (requirements.txt, package.json) are updated by this tool first;
-    then Patchwork can be run for impact analysis/code fixes. We pass openai_api_key via CLI.
-    """
-    if dry_run:
-        logger.info("Dry run: skipping Patchwork execution")
-        return None
-    key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key:
-        logger.warning("OPENAI_API_KEY not set; Patchwork LLM steps may fail")
-    cwd = Path(project_dir or ".")
-    default_yml = getattr(settings, "patchwork_default_yml_path", "default.yml")
-    if Path(default_yml).exists():
-        update_patchwork_default_yml(default_yml, key)
-    # Run: patchwork DependencyUpgrade openai_api_key=...
-    cmd = [
-        "patchwork",
-        "DependencyUpgrade",
-        f"openai_api_key={key}",
-    ]
+    """Run a single Patchwork patchflow (DependencyUpgrade or AutoFix)."""
+    cmd = ["patchwork", patchflow, f"openai_api_key={key}"]
     try:
         result = subprocess.run(
             cmd,
             cwd=cwd,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=timeout,
         )
         if result.stdout:
-            logger.info("Patchwork stdout: %s", result.stdout[:2000])
+            logger.info("Patchwork %s stdout: %s", patchflow, result.stdout[:2000])
         if result.stderr:
-            logger.warning("Patchwork stderr: %s", result.stderr[:2000])
+            logger.warning("Patchwork %s stderr: %s", patchflow, result.stderr[:2000])
         if result.returncode != 0:
-            logger.error("Patchwork exited with code %s", result.returncode)
+            logger.error("Patchwork %s exited with code %s", patchflow, result.returncode)
         return result
     except FileNotFoundError:
         logger.error(
@@ -101,11 +81,43 @@ def run_patchwork(
         )
         return None
     except subprocess.TimeoutExpired:
-        logger.error("Patchwork timed out after 600s")
+        logger.error("Patchwork %s timed out after %ss", patchflow, timeout)
         return None
     except Exception as e:
-        logger.exception("Patchwork run failed: %s", e)
+        logger.exception("Patchwork %s run failed: %s", patchflow, e)
         return None
+
+
+def run_patchwork(
+    settings: Settings,
+    plan: UpgradePlan,
+    project_dir: str | Path | None = None,
+    dry_run: bool = False,
+) -> list[subprocess.CompletedProcess | None]:
+    """
+    Run Patchwork DependencyUpgrade and AutoFix (both required for apply).
+    See: https://github.com/patched-codes/patchwork (DependencyUpgrade, AutoFix).
+    - DependencyUpgrade: dependency upgrade flow (aligns with our Artifactory-gated plan).
+    - AutoFix: vulnerability/code fixes (e.g. Semgrep-based).
+    If dry_run: do not execute, return [].
+    """
+    if dry_run:
+        logger.info("Dry run: skipping Patchwork execution")
+        return []
+    key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY", "").strip()
+    if not key:
+        logger.warning("OPENAI_API_KEY not set; Patchwork LLM steps will fail")
+    cwd = Path(project_dir or ".")
+    default_yml = getattr(settings, "patchwork_default_yml_path", "default.yml")
+    if Path(default_yml).exists():
+        update_patchwork_default_yml(default_yml, key)
+
+    results: list[subprocess.CompletedProcess | None] = []
+    # 1) DependencyUpgrade (dependency upgrades)
+    results.append(_run_patchwork_cmd("DependencyUpgrade", key, cwd))
+    # 2) AutoFix (vulnerability/code fixes)
+    results.append(_run_patchwork_cmd("AutoFix", key, cwd))
+    return results
 
 
 def apply_manifest_updates(plan: UpgradePlan, project_dir: str | Path) -> list[str]:

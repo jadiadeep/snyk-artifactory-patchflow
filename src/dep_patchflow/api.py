@@ -104,9 +104,9 @@ async def apply(
         write_reports(plan, out_dir="out")
         modified = apply_manifest_updates(plan, Path(project_dir))
         pw_ran = False
-        if run_patchwork and plan.upgrades:
-            result = run_patchwork(settings, plan, project_dir=project_dir, dry_run=False)
-            pw_ran = result is not None
+        if run_patchwork:
+            results = run_patchwork(settings, plan, project_dir=project_dir, dry_run=False)
+            pw_ran = len(results) > 0
         return ApplyResponse(
             success=True,
             message="Plan applied",

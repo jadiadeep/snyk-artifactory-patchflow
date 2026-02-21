@@ -89,9 +89,10 @@ def choose_best_version(
     ecosystem: Ecosystem,
 ) -> Tuple[str | None, str]:
     """
-    Select the best upgrade version. Returns (selected_version, reason).
-    - Prefer Snyk fix versions that exist in Artifactory (ascending).
-    - If none: smallest version in Artifactory >= min Snyk fix (if any), else latest safe.
+    Select the best upgrade version. All versions must exist in Artifactory (tool can only use what's there).
+    - If Snyk's requested fix version exists in Artifactory → use it (prefer smallest Snyk fix that's available).
+    - If Snyk's requested version is NOT in Artifactory → use the latest available in Artifactory
+      (e.g. Snyk asks for 3.9 but Artifactory has only up to 3.7 → use 3.7 so the tool can actually download it).
     - Respect allow_major and prefer_stable_only.
     """
     installed = (installed_version or "0").strip()
@@ -106,7 +107,7 @@ def choose_best_version(
     if not candidates:
         return None, "No stable versions in Artifactory after filtering pre-releases"
 
-    # Sort ascending
+    # Sort ascending so "latest" = last element
     if ecosystem == Ecosystem.PYTHON:
         candidates.sort(key=lambda x: (_parse_python_version(x) or PyVersion("0")))
     else:
@@ -116,35 +117,26 @@ def choose_best_version(
         except Exception:
             candidates.sort()
 
-    # Prefer Snyk fix versions that are in Artifactory
-    for snyk_ver in snyk_fix_versions:
-        if snyk_ver not in af_set:
-            continue
+    # 1) Prefer Snyk fix versions that exist in Artifactory (use smallest that fixes)
+    snyk_in_af = [s for s in snyk_fix_versions if s in af_set and (not prefer_stable_only or s in candidates)]
+    if ecosystem == Ecosystem.PYTHON:
+        snyk_in_af.sort(key=lambda x: (_parse_python_version(x) or PyVersion("0")))
+    else:
+        try:
+            import semver
+            snyk_in_af.sort(key=lambda x: semver.VersionInfo.parse(x.lstrip("v")))
+        except Exception:
+            snyk_in_af.sort()
+    for snyk_ver in snyk_in_af:
         if not allow_major and _is_major_upgrade(installed, snyk_ver, ecosystem):
-            continue
-        if prefer_stable_only and snyk_ver not in candidates:
             continue
         return snyk_ver, "Snyk fix version available in Artifactory"
 
-    # Min Snyk fix version (smallest that fixes the vuln)
-    min_snyk: str | None = None
-    for s in snyk_fix_versions:
-        if s in af_set and (min_snyk is None or cmp_fn(s, min_snyk) < 0):
-            min_snyk = s
-    if min_snyk and allow_major:
-        return min_snyk, "Snyk fix version (major allowed)"
-
-    # Smallest version in Artifactory >= min_snyk or >= installed
-    target_min = min_snyk or installed
-    for c in candidates:
-        if cmp_fn(c, target_min) >= 0:
-            if not allow_major and _is_major_upgrade(installed, c, ecosystem):
-                continue
-            return c, "Smallest Artifactory version >= " + (min_snyk or "installed")
-    # Fallback: latest in Artifactory that is not major if not allow_major
+    # 2) Snyk's requested version(s) not in Artifactory → use latest available in Artifactory
+    #    so the tool can actually download the package (e.g. Snyk says 3.9, Artifactory has 3.7 → use 3.7)
     for c in reversed(candidates):
         if allow_major:
-            return c, "Latest available in Artifactory"
+            return c, "Latest in Artifactory (Snyk requested version not available)"
         if not _is_major_upgrade(installed, c, ecosystem):
-            return c, "Latest non-major in Artifactory"
+            return c, "Latest in Artifactory (Snyk requested version not available)"
     return None, "No suitable version (major upgrade disallowed or no candidate)"
