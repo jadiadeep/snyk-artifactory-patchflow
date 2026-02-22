@@ -25,6 +25,14 @@ PKG_MANAGER_TO_ECOSYSTEM = {
 
 
 def _normalize_severity(s: str | None) -> Severity:
+    """Normalize severity string to Severity enum.
+
+    Args:
+        s: Severity string from Snyk report (e.g., "high", "critical")
+
+    Returns:
+        Severity enum value, defaults to MEDIUM if unknown or None
+    """
     if not s:
         return Severity.MEDIUM
     key = str(s).lower().strip()
@@ -32,6 +40,15 @@ def _normalize_severity(s: str | None) -> Severity:
 
 
 def _ecosystem_from_package_manager(pm: str | None, language: str | None) -> Ecosystem:
+    """Determine ecosystem from package manager or language.
+
+    Args:
+        pm: Package manager name (e.g., "pip", "npm", "yarn")
+        language: Programming language (e.g., "python", "javascript")
+
+    Returns:
+        Ecosystem enum value, defaults to PYTHON if unknown
+    """
     if pm:
         pm_lower = str(pm).lower()
         if pm_lower in PKG_MANAGER_TO_ECOSYSTEM:
@@ -46,7 +63,20 @@ def _ecosystem_from_package_manager(pm: str | None, language: str | None) -> Eco
 
 
 def _extract_fix_versions(vuln: dict) -> list[str]:
-    """From Snyk vuln, get list of fix versions (upgradePath or fix info)."""
+    """Extract fix versions from Snyk vulnerability data.
+
+    Snyk reports can have fix versions in multiple formats:
+    - upgradePath: Array of package@version strings
+    - fixedIn: Version string or array
+    - fixVersion: Version string
+    - patchedVersions: Array of version strings
+
+    Args:
+        vuln: Vulnerability dictionary from Snyk JSON
+
+    Returns:
+        List of version strings that fix the vulnerability (deduplicated, ordered)
+    """
     fix_versions: list[str] = []
     # upgradePath can be array of package@version; last is often the fix
     path = vuln.get("upgradePath")
@@ -76,9 +106,22 @@ def _extract_fix_versions(vuln: dict) -> list[str]:
 
 
 def parse_snyk_json(path: str | Path) -> list[Finding]:
-    """
-    Parse Snyk JSON from `snyk test --json` (or file path).
-    Returns normalized list of Finding. Logs and skips unknown formats.
+    """Parse Snyk JSON report into normalized Finding objects.
+
+    Parses the output from `snyk test --json` and converts it into a list of
+    normalized Finding objects. Handles various Snyk report formats and
+    deduplicates findings by (ecosystem, package_name, installed_version).
+
+    Args:
+        path: Path to Snyk JSON report file
+
+    Returns:
+        List of Finding objects (empty list if file not found or invalid JSON)
+
+    Note:
+        - Logs warnings for missing files or invalid JSON
+        - Skips vulnerabilities without package names
+        - Deduplicates findings keeping the first occurrence
     """
     path = Path(path)
     if not path.exists():

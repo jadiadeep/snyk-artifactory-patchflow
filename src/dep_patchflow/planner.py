@@ -14,6 +14,15 @@ SEVERITY_ORDER = {Severity.LOW: 0, Severity.MEDIUM: 1, Severity.HIGH: 2, Severit
 
 
 def _severity_at_least(severity: Severity, min_severity: str) -> bool:
+    """Check if severity meets or exceeds minimum severity threshold.
+
+    Args:
+        severity: Severity level to check
+        min_severity: Minimum required severity (as string)
+
+    Returns:
+        True if severity >= min_severity, False otherwise
+    """
     min_val = SEVERITY_ORDER.get(Severity(min_severity), 0)
     return SEVERITY_ORDER.get(severity, 0) >= min_val
 
@@ -25,9 +34,31 @@ def build_plan(
     snyk_report_path: str | None = None,
     config_path: str | None = None,
 ) -> UpgradePlan:
-    """
-    Resolve target versions using Artifactory and policy; produce UpgradePlan.
-    Enforces max_upgrades_per_run and min_severity.
+    """Build upgrade plan from Snyk findings with Artifactory version resolution.
+
+    This is the core planning function that:
+    1. Filters findings by severity threshold
+    2. Queries Artifactory for available versions
+    3. Selects best upgrade version using version policy
+    4. Respects max_upgrades_per_run limit
+    5. Creates UpgradePlan with upgrades and skipped items
+
+    Args:
+        findings: List of vulnerability findings from Snyk
+        settings: Settings object with Artifactory configuration
+        policy: Policy settings (if None, uses settings.get_policy())
+        snyk_report_path: Path to Snyk report (for metadata)
+        config_path: Path to config file (for metadata)
+
+    Returns:
+        UpgradePlan containing:
+        - List of upgrades to apply (with Artifactory-verified versions)
+        - List of skipped items (with reasons)
+        - Metadata (timestamps, paths)
+
+    Note:
+        Findings are processed in severity order (critical first) up to
+        max_upgrades_per_run limit. Items below min_severity are skipped.
     """
     policy = policy or settings.get_policy()
     upgrades: list[UpgradeItem] = []

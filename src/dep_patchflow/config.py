@@ -9,7 +9,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class PolicySettings(BaseSettings):
-    """Version and run policy."""
+    """Version and run policy settings.
+
+    Controls upgrade behavior such as severity thresholds, major version upgrades,
+    and maximum number of upgrades per run.
+    """
 
     allow_major: bool = False
     min_severity: Literal["low", "medium", "high", "critical"] = "medium"
@@ -19,7 +23,15 @@ class PolicySettings(BaseSettings):
 
 
 class Settings(BaseSettings):
-    """Main settings from env + optional config file."""
+    """Main application settings loaded from environment variables and config files.
+
+    Supports loading from:
+    - Environment variables (with UPPER_SNAKE_CASE names)
+    - .env file
+    - YAML config file (via from_yaml class method)
+
+    Environment variables take precedence over config file values.
+    """
 
     model_config = SettingsConfigDict(
         env_prefix="",
@@ -81,7 +93,14 @@ class Settings(BaseSettings):
         return cls(**{k: v for k, v in data.items() if k in cls.model_fields})
 
     def get_policy(self) -> PolicySettings:
-        """Build policy from settings (env overrides YAML)."""
+        """Build PolicySettings from current settings.
+
+        Converts policy_* fields to PolicySettings object, using defaults
+        for any None values. Environment variables override YAML config.
+
+        Returns:
+            PolicySettings object with all policy values resolved
+        """
         return PolicySettings(
             allow_major=self.policy_allow_major if self.policy_allow_major is not None else False,
             min_severity=self.policy_min_severity or "medium",

@@ -11,7 +11,19 @@ logger = logging.getLogger(__name__)
 
 
 def filter_prereleases(versions: list[str], ecosystem: Ecosystem) -> list[str]:
-    """Return only stable versions (no dev, alpha, beta, rc, post)."""
+    """Filter out pre-release versions, keeping only stable releases.
+
+    Removes versions containing pre-release identifiers like:
+    - dev, alpha, a0, beta, b0, rc, pre
+    - Post releases (e.g., 1.0.0.post1) are kept for Python
+
+    Args:
+        versions: List of version strings to filter
+        ecosystem: Package ecosystem (affects post-release handling)
+
+    Returns:
+        List containing only stable version strings
+    """
     out: list[str] = []
     for v in versions:
         v_lower = v.lower()
@@ -29,6 +41,14 @@ def filter_prereleases(versions: list[str], ecosystem: Ecosystem) -> list[str]:
 
 
 def _parse_python_version(v: str) -> PyVersion | None:
+    """Parse Python version string using PEP 440 rules.
+
+    Args:
+        v: Version string to parse
+
+    Returns:
+        PyVersion object if valid, None otherwise
+    """
     try:
         return PyVersion(v)
     except Exception:
@@ -36,7 +56,16 @@ def _parse_python_version(v: str) -> PyVersion | None:
 
 
 def _python_cmp(v1: str, v2: str) -> int:
-    """Return -1 if v1 < v2, 0 if equal, 1 if v1 > v2."""
+    """Compare two Python version strings.
+
+    Args:
+        v1: First version string
+        v2: Second version string
+
+    Returns:
+        -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+        Invalid versions are treated as less than valid versions
+    """
     p1, p2 = _parse_python_version(v1), _parse_python_version(v2)
     if p1 is None and p2 is None:
         return 0
@@ -66,10 +95,21 @@ def _node_cmp(v1: str, v2: str) -> int:
 
 
 def _is_major_upgrade(installed: str, candidate: str, ecosystem: Ecosystem) -> bool:
+    """Check if candidate version is a major upgrade from installed version.
+
+    Args:
+        installed: Currently installed version
+        candidate: Candidate version to check
+        ecosystem: Package ecosystem (affects version parsing)
+
+    Returns:
+        True if candidate is a major version upgrade, False otherwise
+        Returns True if version parsing fails (conservative approach)
+    """
     if ecosystem == Ecosystem.PYTHON:
         p1, p2 = _parse_python_version(installed), _parse_python_version(candidate)
         if p1 is None or p2 is None:
-            return True
+            return True  # Conservative: assume major upgrade if parsing fails
         return p1.major != p2.major
     try:
         import semver
@@ -77,7 +117,7 @@ def _is_major_upgrade(installed: str, candidate: str, ecosystem: Ecosystem) -> b
         v2 = semver.VersionInfo.parse(candidate.lstrip("v"))
         return v1.major != v2.major
     except Exception:
-        return True
+        return True  # Conservative: assume major upgrade if parsing fails
 
 
 def choose_best_version(
@@ -88,12 +128,31 @@ def choose_best_version(
     prefer_stable_only: bool,
     ecosystem: Ecosystem,
 ) -> Tuple[str | None, str]:
-    """
-    Select the best upgrade version. All versions must exist in Artifactory (tool can only use what's there).
-    - If Snyk's requested fix version exists in Artifactory → use it (prefer smallest Snyk fix that's available).
-    - If Snyk's requested version is NOT in Artifactory → use the latest available in Artifactory
-      (e.g. Snyk asks for 3.9 but Artifactory has only up to 3.7 → use 3.7 so the tool can actually download it).
-    - Respect allow_major and prefer_stable_only.
+    """Select the best upgrade version from available options.
+
+    This function implements the core version selection logic:
+    1. All versions must exist in Artifactory (tool can only use what's available)
+    2. Prefer Snyk's recommended fix versions if available in Artifactory
+    3. If Snyk's version not available, use latest available in Artifactory
+    4. Respect policy constraints (allow_major, prefer_stable_only)
+
+    Args:
+        installed_version: Currently installed version (or "0" if unknown)
+        snyk_fix_versions: List of versions Snyk recommends to fix the vulnerability
+        artifactory_versions: List of versions available in Artifactory
+        allow_major: Whether to allow major version upgrades
+        prefer_stable_only: Whether to filter out pre-release versions
+        ecosystem: Package ecosystem (PYTHON or NODE)
+
+    Returns:
+        Tuple of (selected_version, reason_string)
+        - selected_version: Best version to upgrade to, or None if no suitable version
+        - reason: Human-readable explanation of why this version was chosen
+
+    Example:
+        If Snyk recommends 3.9 but Artifactory only has up to 3.7,
+        this function will return 3.7 with reason explaining that Snyk's
+        version wasn't available, so latest in Artifactory was used.
     """
     installed = (installed_version or "0").strip()
     cmp_fn = _python_cmp if ecosystem == Ecosystem.PYTHON else _node_cmp

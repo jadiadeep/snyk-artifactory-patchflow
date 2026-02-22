@@ -7,9 +7,23 @@ from .models import UpgradePlan
 
 
 def write_reports(plan: UpgradePlan, out_dir: str | Path = "out") -> tuple[Path, Path]:
-    """
-    Write out/upgrade_summary.json and out/upgrade_summary.md.
-    Returns (path_to_json, path_to_md).
+    """Generate upgrade plan reports in JSON and Markdown formats.
+
+    Creates two output files:
+    - upgrade_summary.json: Machine-readable JSON with full plan data
+    - upgrade_summary.md: Human-readable Markdown report with tables
+
+    Args:
+        plan: UpgradePlan object containing upgrades and skipped items
+        out_dir: Output directory (default: "out")
+
+    Returns:
+        Tuple of (json_path, md_path) Path objects
+
+    Note:
+        - Creates output directory if it doesn't exist
+        - JSON includes serialized model data with enum values converted to strings
+        - Markdown includes summary statistics and formatted tables
     """
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

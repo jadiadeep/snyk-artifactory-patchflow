@@ -37,7 +37,17 @@ def update_patchwork_default_yml(
 
 
 def generate_patchflow_instructions(plan: UpgradePlan) -> str:
-    """Generate a patchflow instruction file content for dependency upgrades (for documentation/CLI)."""
+    """Generate patchflow instruction file content for dependency upgrades.
+
+    Creates a human-readable markdown document describing the upgrade plan.
+    Useful for documentation or manual review before applying upgrades.
+
+    Args:
+        plan: UpgradePlan containing upgrades and skipped items
+
+    Returns:
+        Markdown-formatted string with upgrade instructions
+    """
     lines = [
         "# Patchflow: dependency upgrades (dep-patchflow plan)",
         "",
@@ -121,9 +131,23 @@ def run_patchwork(
 
 
 def apply_manifest_updates(plan: UpgradePlan, project_dir: str | Path) -> list[str]:
-    """
-    Apply upgrade plan to requirements.txt and package.json in project_dir.
-    Returns list of modified file paths.
+    """Apply upgrade plan to dependency manifest files.
+
+    Updates requirements.txt (Python) and package.json (Node.js) with new versions
+    from the upgrade plan. Only updates existing packages; does not add new dependencies.
+
+    Args:
+        plan: UpgradePlan containing upgrades to apply
+        project_dir: Project root directory containing manifest files
+
+    Returns:
+        List of file paths that were modified (empty if none found or no updates)
+
+    Note:
+        - Python: Updates package==version format in requirements.txt
+        - Node.js: Updates dependencies and devDependencies with ^version (semver caret)
+        - Preserves comments and other lines in requirements.txt
+        - Only modifies files that exist and have packages to update
     """
     project_dir = Path(project_dir)
     modified: list[str] = []

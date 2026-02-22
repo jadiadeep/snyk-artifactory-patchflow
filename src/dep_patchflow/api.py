@@ -27,6 +27,14 @@ _settings: Settings | None = None
 
 
 def get_settings() -> Settings:
+    """Get or create global Settings instance.
+
+    Uses singleton pattern to load settings once at startup.
+    Settings can be overridden via environment variables.
+
+    Returns:
+        Settings object loaded from environment variables
+    """
     global _settings
     if _settings is None:
         _settings = Settings()
@@ -58,7 +66,21 @@ async def scan_report(
     file: UploadFile = File(..., description="Snyk JSON report file"),
     config_path: str | None = None,
 ) -> ScanReportResponse:
-    """Upload Snyk JSON report; returns upgrade plan (no apply)."""
+    """Upload Snyk JSON report and generate upgrade plan.
+
+    Parses the uploaded Snyk report, queries Artifactory for available versions,
+    and generates an upgrade plan. Does not apply changes.
+
+    Args:
+        file: Uploaded Snyk JSON report file
+        config_path: Optional path to config file (overrides default settings)
+
+    Returns:
+        ScanReportResponse with plan summary and output file paths
+
+    Raises:
+        HTTPException: If file is not JSON or processing fails
+    """
     if not file.filename or not file.filename.endswith(".json"):
         raise HTTPException(400, "Expected a .json file (Snyk test --json output)")
     content = await file.read()
@@ -118,5 +140,11 @@ async def apply(
 
 
 def serve(host: str = "0.0.0.0", port: int = 8000) -> None:
+    """Start FastAPI server with uvicorn.
+
+    Args:
+        host: Host to bind to (default: "0.0.0.0" for all interfaces)
+        port: Port to listen on (default: 8000)
+    """
     import uvicorn
     uvicorn.run("dep_patchflow.api:app", host=host, port=port, reload=False)

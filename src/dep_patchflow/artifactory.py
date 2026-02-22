@@ -17,33 +17,65 @@ _cache_miss_reasons: dict[tuple[str, str], str] = {}
 
 
 def _sort_python(versions: list[str]) -> list[str]:
+    """Sort Python package versions using PEP 440 versioning rules.
+
+    Args:
+        versions: List of version strings to sort
+
+    Returns:
+        Sorted list of versions (invalid versions placed at start with "0")
+    """
     parsed: list[tuple[PyVersion, str]] = []
     for v in versions:
         try:
             parsed.append((PyVersion(v), v))
         except Exception:
+            # Invalid versions sorted as "0" (placed at start)
             parsed.append((PyVersion("0"), v))
     parsed.sort(key=lambda x: x[0])
     return [v for _, v in parsed]
 
 
 def _sort_node(versions: list[str]) -> list[str]:
+    """Sort Node.js package versions using semantic versioning (semver).
+
+    Args:
+        versions: List of version strings to sort
+
+    Returns:
+        Sorted list of versions (falls back to string sort if semver unavailable)
+    """
     try:
         import semver
         parsed: list[tuple[tuple[int, int, int], str]] = []
         for v in versions:
             try:
+                # Remove 'v' prefix if present (e.g., "v1.2.3" -> "1.2.3")
                 ver = semver.VersionInfo.parse(v.lstrip("v"))
                 parsed.append(((ver.major, ver.minor, ver.patch), v))
             except Exception:
+                # Invalid versions sorted as (0, 0, 0)
                 parsed.append(((0, 0, 0), v))
         parsed.sort(key=lambda x: x[0])
         return [v for _, v in parsed]
     except Exception:
+        # Fallback to string sort if semver library unavailable
         return sorted(versions)
 
 
 def _auth_headers(settings: Settings) -> dict[str, str]:
+    """Generate HTTP authentication headers for Artifactory API requests.
+
+    Supports two authentication methods (in order of preference):
+    1. Bearer token authentication
+    2. Basic authentication (username/password)
+
+    Args:
+        settings: Settings object containing Artifactory credentials
+
+    Returns:
+        Dictionary with Authorization header, or empty dict if no credentials
+    """
     if settings.artifactory_token:
         return {"Authorization": f"Bearer {settings.artifactory_token}"}
     if settings.artifactory_username and settings.artifactory_password:
@@ -62,10 +94,25 @@ def list_versions_aql(
     ecosystem: Ecosystem,
     package_name: str,
 ) -> list[str]:
-    """
-    List versions via Artifactory AQL.
-    PyPI: repo path typically stores items like package_name/version/
-    NPM: repo path typically stores package_name/-/package_name-version.tgz
+    """List available package versions using Artifactory AQL (Artifactory Query Language).
+
+    Queries Artifactory using AQL to find all versions of a package. Handles different
+    repository layouts for PyPI and npm packages.
+
+    Args:
+        client: HTTP client with authentication headers already set
+        base_url: Artifactory base URL (e.g., "https://company.jfrog.io/artifactory")
+        repo: Repository name (e.g., "pypi-remote", "npm-remote")
+        ecosystem: Package ecosystem (PYTHON or NODE)
+        package_name: Name of the package to query
+
+    Returns:
+        Sorted list of version strings (empty list on error)
+
+    Note:
+        - PyPI: Looks for .whl files in paths containing package name
+        - npm: Looks for .tgz files in paths containing package name
+        - Versions are extracted from path segments and sorted appropriately
     """
     if ecosystem == Ecosystem.PYTHON:
         # AQL: find items in repo where path contains package name
@@ -122,6 +169,17 @@ def list_versions_aql(
 
 
 def __aql_dict_to_query(d: dict) -> str:
+    """Convert dictionary to AQL query string format.
+
+    Args:
+        d: Dictionary with AQL query parameters
+
+    Returns:
+        AQL query string (e.g., '{"repo":"pypi-remote","path":{"$match":"*requests*"}}')
+
+    Note:
+        This is a private helper function for building AQL queries.
+    """
     parts = []
     for k, v in d.items():
         if isinstance(v, dict) and "$match" in v:
@@ -138,10 +196,25 @@ def list_versions_metadata(
     ecosystem: Ecosystem,
     package_name: str,
 ) -> list[str]:
-    """
-    List versions via repository metadata / folder browsing.
-    PyPI: GET /artifactory/repo/pypi/packagename/ -> parse index or simple list
-    NPM: GET /artifactory/repo/package_name -> parse package metadata
+    """List available package versions using Artifactory metadata API.
+
+    Uses Artifactory's metadata endpoints instead of AQL. Tries multiple URL patterns
+    to accommodate different repository configurations.
+
+    Args:
+        client: HTTP client with authentication headers already set
+        base_url: Artifactory base URL
+        repo: Repository name
+        ecosystem: Package ecosystem (PYTHON or NODE)
+        package_name: Name of the package to query
+
+    Returns:
+        Sorted list of version strings (empty list on error)
+
+    Note:
+        - PyPI: Tries /api/pypi/{repo}/packages/{name}/versions first, then fallback URLs
+        - npm: Tries /api/npm/npms/{repo}/{name} first, then fallback URLs
+        - Handles both JSON array and object responses
     """
     base = base_url.rstrip("/")
     if ecosystem == Ecosystem.PYTHON:
@@ -228,7 +301,11 @@ def list_versions(
 
 
 def clear_cache() -> None:
-    """Clear in-memory version cache (e.g. for tests)."""
+    """Clear in-memory version cache and cache miss reasons.
+
+    Useful for testing or when you need to force fresh API calls.
+    Clears both the version cache and the cache miss reasons dictionary.
+    """
     global _version_cache, _cache_miss_reasons
     _version_cache = {}
     _cache_miss_reasons = {}

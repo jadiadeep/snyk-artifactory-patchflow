@@ -24,7 +24,17 @@ DEFAULTS_YML = "defaults.yml"
 
 
 def _load_config(config_path: str | None) -> tuple[Settings, str | None]:
-    """Load from --config if given, else from defaults.yml in cwd. Returns (settings, path_used)."""
+    """Load configuration from file or use defaults.
+
+    Loads settings from specified config file, or falls back to defaults.yml
+    in current directory, or uses default Settings() if no file exists.
+
+    Args:
+        config_path: Optional path to config file (from --config option)
+
+    Returns:
+        Tuple of (Settings object, config file path used or None)
+    """
     path = None
     if config_path and Path(config_path).exists():
         path = Path(config_path)
@@ -40,7 +50,18 @@ def plan(
     snyk_report: Path = typer.Argument(..., help="Path to Snyk JSON report (snyk test --json)"),
     config: Path = typer.Option(None, "--config", "-c", help="Path to config (default: defaults.yml)"),
 ) -> None:
-    """Parse Snyk report, resolve versions via Artifactory, output upgrade plan (JSON + MD)."""
+    """Generate upgrade plan from Snyk report without applying changes.
+
+    Parses the Snyk vulnerability report, queries Artifactory for available versions,
+    and generates an upgrade plan. Outputs both JSON and Markdown reports.
+
+    Args:
+        snyk_report: Path to Snyk JSON report file
+        config: Optional path to config file (default: defaults.yml)
+
+    Exits:
+        Exit code 1 if Snyk report file not found
+    """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     settings, config_used = _load_config(str(config) if config else None)
 
@@ -80,7 +101,24 @@ def apply(
     project_dir: Path = typer.Option(Path("."), "--project-dir", "-d", help="Project root (for manifests + Patchwork)"),
     run_patchwork_cli: bool = typer.Option(True, "--patchwork/--no-patchwork", help="Run Patchwork DependencyUpgrade + AutoFix after applying manifest updates"),
 ) -> None:
-    """Apply upgrade plan: update manifests, then run Patchwork DependencyUpgrade and AutoFix."""
+    """Apply upgrade plan: update manifest files and optionally run Patchwork.
+
+    Performs the full apply workflow:
+    1. Parse Snyk report and build upgrade plan
+    2. Update requirements.txt and/or package.json with new versions
+    3. Optionally run Patchwork DependencyUpgrade and AutoFix
+
+    Args:
+        snyk_report: Path to Snyk JSON report file
+        config: Optional path to config file (default: defaults.yml)
+        project_dir: Project root directory containing manifest files
+        run_patchwork_cli: Whether to run Patchwork after updating manifests
+
+    Note:
+        - Respects dry_run policy setting (if enabled, no files are modified)
+        - Skips Patchwork if --no-patchwork flag is used
+        - Exits with code 1 if Snyk report file not found
+    """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     settings, config_used = _load_config(str(config) if config else None)
     policy = settings.get_policy()
